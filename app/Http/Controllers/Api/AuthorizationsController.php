@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Requests\Api\WeappAuthorizationRequest;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Http\Request;
@@ -96,5 +97,43 @@ class AuthorizationsController extends Controller
             'token_type' => 'Bearer',
             'expires_in' => auth('api')->factory()->getTTL() * 60
         ]);
+    }
+
+    public function weappStore(WeappAuthorizationRequest $request)
+    {
+
+        $code = $request->code;//从前端传过来的code只能使用一次
+
+        // 根据 code 获取微信 openid 和 session_key
+        $miniProgram = \EasyWeChat::miniProgram();
+        $data = $miniProgram->auth->session($code);//$data返回的结构：["session_key" => "7T3mk6/X+IeJXNcPJshW2Q==", "openid" => "oZpZe5fzEJhqvP8mdGgo0goQr9ns",];
+
+        // 如果结果错误，说明 code 已过期或不正确，返回 401 错误
+        if (isset($data['errcode'])) {
+            throw new AuthenticationException('code 不正确');
+        }
+
+        $user = User::where('weapp_openid', $data['openid'])->first();// 找到 openid 对应的用户
+        $attributes['weixin_session_key'] = $data['session_key'];
+
+        if (!$user) {//如果未找到对应的用户，则需要提交用户名和密码进行用户绑定
+            if (!$request->username) throw new AuthenticationException('用户不存在');
+            $username = $request->username;
+            $password = $request->password;
+
+            filter_var($username, FILTER_VALIDATE_EMAIL) ? $credentials['email'] = $username : $credentials['phone'] = $username;
+
+            $credentials['password'] = $password;
+
+            if (!auth('api')->once($credentials)) throw new AuthenticationException('用户名或密码错误');// 验证用户名和密码是否正确
+
+            $user = auth('api')->getUser();// 获取对应的用户
+            $attributes['weapp_openid'] = $data['openid'];
+        }
+
+        $user->update($attributes);// 更新用户数据
+        $token = auth('api')->login($user);// 为当前用户创建 JWT
+
+        return $this->respondWithToken($token)->setStatusCode(201);
     }
 }
