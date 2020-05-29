@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Auth\AuthenticationException;
 use App\Http\Requests\Api\AuthorizationRequest;
 use App\Http\Requests\Api\SocialAuthorizationRequest;
+use Illuminate\Support\Facades\Auth;
 
 class AuthorizationsController extends Controller
 {
@@ -121,7 +122,8 @@ class AuthorizationsController extends Controller
             $username = $request->username;
             $password = $request->password;
 
-            filter_var($username, FILTER_VALIDATE_EMAIL) ? $credentials['email'] = $username : $credentials['phone'] = $username;
+            filter_var($username, FILTER_VALIDATE_EMAIL) ? $credentials['email'] = $username : $credentials['name'] = $username;
+            filter_var($username, FILTER_VALIDATE_INT) ? $credentials['phone'] = $username : $credentials['name'] = $username;
 
             $credentials['password'] = $password;
 
